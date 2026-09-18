@@ -493,7 +493,13 @@ main { flex:1; position:relative; overflow:hidden; }
       <option value="tr-TR">🇹🇷 Türkçe (Turkish)</option>
     </select>
   </div>
-  <div style="display:flex; gap:10px; margin-top:12px;">
+  <div class="form-group" style="margin-top:12px;">
+    <label class="form-label">Microphone Permission</label>
+    <button type="button" class="btn btn-ghost" id="requestMicBtn" style="width:100%; justify-content:center; gap:8px;">
+      🎙️ Allow / Test Microphone Access
+    </button>
+  </div>
+  <div style="display:flex; gap:10px; margin-top:16px;">
     <button class="btn btn-primary" id="saveSettingsBtn" style="flex:1;">Save Settings</button>
   </div>
 </div>
@@ -920,10 +926,41 @@ if(SRC){
   };
   recog.onerror=e=>{ if(e.error==='not-allowed'||e.error==='service-not-allowed')voiceBroken=true; recogActive=false; };
 }
-function startHold(e){
+async function requestMicPermission(showToast = true) {
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => track.stop());
+      voiceBroken = false;
+      if (showToast) toast('Microphone permission granted ✓');
+      return true;
+    } catch (err) {
+      console.warn('Microphone permission error:', err);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        toast('Microphone access blocked. Please allow mic in browser settings.');
+      } else {
+        toast('Microphone not available on this device');
+      }
+      voiceBroken = true;
+      return false;
+    }
+  } else {
+    if (showToast) toast('Microphone API not supported in this browser');
+    return false;
+  }
+}
+
+async function startHold(e){
   if(busy||holding)return; e.preventDefault();
   holding=true; holdStart=Date.now(); fText=''; iText='';
   setCloud('listening'); setStatus('Listening…',true); showBubble('',true);
+
+  if(!window._micPermissionRequested && navigator.mediaDevices && navigator.mediaDevices.getUserMedia){
+    window._micPermissionRequested = true;
+    const ok = await requestMicPermission(false);
+    if(!holding) return;
+  }
+
   if(recog&&!voiceBroken){
     try{
       recog.lang = getActiveVoiceLang();
@@ -1489,6 +1526,8 @@ $('settingsBtn').addEventListener('click',()=>{
   settingsSheet.classList.add('open');
   backdrop.classList.add('show');
 });
+
+$('requestMicBtn').addEventListener('click', () => requestMicPermission(true));
 
 $('saveSettingsBtn').addEventListener('click',()=>{
   const lang = $('voiceLangSelect').value || 'auto';

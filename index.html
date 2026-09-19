@@ -568,13 +568,18 @@ let selSubject = 'Work', doneOpen = true, flashId = null, busy = false;
 let pendingChatAdd = null;
 
 const DEFAULT_PROJECTS = [
-  { id: 'work', name: 'Work', icon: '💼', color: '#3B82F6', keywords: ['work', 'extrawork', 'extra work', 'job', 'office', 'boss', 'client', 'shift', 'meeting', 'project', 'deadline', 'دوام', 'شغل', 'عمل', 'وظيفة'] },
-  { id: 'gym', name: 'Gym', icon: '🏋️', color: '#10B981', keywords: ['gym', 'workout', 'fitness', 'training', 'exercise', 'cardio', 'weights', 'chest', 'legs', 'run', 'جيم', 'تمرين', 'رياضة', 'حديد'] },
-  { id: 'study', name: 'Study', icon: '📚', color: '#8B5CF6', keywords: ['study', 'exam', 'test', 'quiz', 'math', 'homework', 'science', 'history', 'revision', 'assignment', 'school', 'class', 'كلاس', 'مذاكرة', 'امتحان', 'واجب', 'درس', 'مدرسة'] },
-  { id: 'personal', name: 'Personal', icon: '🎯', color: '#F59E0B', keywords: ['personal', 'home', 'buy', 'groceries', 'call', 'doctor', 'mom', 'dad', 'family', 'shopping', 'شخصي', 'بيت', 'تسوق', 'طبيب'] }
+  { id: 'work', name: 'Work', icon: '💼', color: '#3B82F6', keywords: ['work', 'extrawork', 'extra work', 'job', 'office', 'boss', 'client', 'shift', 'meeting', 'project', 'deadline', 'دوام', 'شغل', 'عمل', 'وظيفة', 'مشروع', 'ميتنج', 'اجتماع', 'عميل'] },
+  { id: 'gym', name: 'Gym', icon: '🏋️', color: '#10B981', keywords: ['gym', 'workout', 'fitness', 'training', 'exercise', 'cardio', 'weights', 'chest', 'legs', 'run', 'swim', 'جيم', 'تمرين', 'رياضة', 'حديد', 'كارديو', 'عضلات', 'تدريب', 'جري', 'سباحة'] },
+  { id: 'study', name: 'Study', icon: '📚', color: '#8B5CF6', keywords: ['study', 'exam', 'test', 'quiz', 'math', 'homework', 'science', 'history', 'revision', 'assignment', 'school', 'class', 'كلاس', 'مذاكرة', 'امتحان', 'واجب', 'درس', 'مدرسة', 'جامعة', 'محاضرة', 'كتاب', 'بحث'] },
+  { id: 'food', name: 'Food', icon: '🍳', color: '#EC4899', keywords: ['food', 'cook', 'cooking', 'recipe', 'chicken', 'meat', 'dinner', 'lunch', 'breakfast', 'meal', 'eat', 'groceries', 'restaurant', 'طعام', 'أكل', 'طبخ', 'دجاج', 'لحم', 'سمك', 'غداء', 'عشاء', 'فطور', 'وجبة', 'مطعم', 'وصفة', 'مشوي', 'مقادير', 'شاورما', 'بيتزا', 'سوشي'] },
+  { id: 'personal', name: 'Personal', icon: '🎯', color: '#F59E0B', keywords: ['personal', 'home', 'buy', 'groceries', 'call', 'doctor', 'mom', 'dad', 'family', 'shopping', 'شخصي', 'بيت', 'تسوق', 'طبيب', 'عائلة', 'دواء', 'مشوار', 'شراء', 'سيارة', 'بنك', 'أمي', 'أبي'] }
 ];
 
 let projects = JSON.parse(localStorage.getItem('sm_projects')) || DEFAULT_PROJECTS;
+if (!projects.some(p => p.id === 'food' || (p.name||'').toLowerCase() === 'food')) {
+  projects.splice(3, 0, DEFAULT_PROJECTS.find(p => p.id === 'food'));
+  localStorage.setItem('sm_projects', JSON.stringify(projects));
+}
 const saveProjects = () => localStorage.setItem('sm_projects', JSON.stringify(projects));
 
 let activeFolderId = null; // null = root directory overview, or 'work', 'gym', etc.
@@ -602,18 +607,46 @@ const startOfDay = d => { const x = new Date(d); x.setHours(0,0,0,0); return x; 
 const today = () => startOfDay(new Date());
 const addDays = (d,n) => { const x = new Date(d); x.setDate(x.getDate()+n); return x; };
 const diffDays = (a,b) => Math.round((startOfDay(b)-startOfDay(a))/DAY);
-const toISO = d => d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
-const fromISO = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y,m-1,d); };
+const toISO = d => (d instanceof Date ? d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()) : String(d||''));
+const fromISO = s => {
+  if(!s) return today();
+  if(s instanceof Date) return s;
+  const parts = String(s).split('-');
+  const y = Number(parts[0]) || today().getFullYear();
+  const m = Number(parts[1]) || (today().getMonth()+1);
+  const d = Number(parts[2]) || today().getDate();
+  return new Date(y, m-1, d);
+};
 const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const cap = s => s.split(' ').map(w=>w?w[0].toUpperCase()+w.slice(1):w).join(' ');
 const byId = id => tasks.find(t=>t.id===id);
 const sleep = ms => new Promise(r=>setTimeout(r,ms));
 
-function fmtTime(t){ if(!t) return ''; let [h,m]=t.split(':').map(Number); const ap=h>=12?'PM':'AM'; h=h%12||12; return m?h+':'+pad(m)+' '+ap:h+' '+ap; }
-function fmtDueShort(iso){ if(!iso) return ''; const d=fromISO(iso), n=diffDays(today(),d);
-  if(n===0)return'Today'; if(n===1)return'Tomorrow'; if(n===-1)return'Yesterday';
-  if(n>1&&n<7)return WD[d.getDay()]; if(n<-1)return Math.abs(n)+' days late';
-  return WD[d.getDay()]+' '+d.getDate()+' '+MO[d.getMonth()]; }
+const AR_WD = ['الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+function fmtTime(t, isAr = false){
+  if(!t) return '';
+  let [h,m]=t.split(':').map(Number);
+  const ap = isAr ? (h>=12 ? 'مساءً' : 'صباحاً') : (h>=12 ? 'PM' : 'AM');
+  h = h%12 || 12;
+  return m ? h+':'+pad(m)+' '+ap : h+':00 '+ap;
+}
+function fmtDueShort(iso, isAr = false){
+  if(!iso) return '';
+  const d = fromISO(iso), n = diffDays(today(), d);
+  if(isAr){
+    if(n===0) return 'اليوم';
+    if(n===1) return 'غداً';
+    if(n===-1) return 'أمس';
+    if(n>1 && n<7) return 'يوم ' + AR_WD[d.getDay()];
+    return AR_WD[d.getDay()]+' '+d.getDate()+'/'+(d.getMonth()+1);
+  }
+  if(n===0) return 'Today';
+  if(n===1) return 'Tomorrow';
+  if(n===-1) return 'Yesterday';
+  if(n>1&&n<7) return WD[d.getDay()];
+  if(n<-1) return Math.abs(n)+' days late';
+  return WD[d.getDay()]+' '+d.getDate()+' '+MO[d.getMonth()];
+}
 /* PRD reminder table: tomorrow→today · 2–3 days→1 before · 4+→2 before */
 function computeReminder(due, remDays, remTime){
   let d = remDays;
@@ -773,6 +806,12 @@ function parseLocally(raw){
     } else if(val < 24){
       res.remTime = pad(val) + ':00';
     }
+  } else if(/(?:^|\s)(?:غداء|غدا|lunch)(?:\s|$)/i.test(w)){
+    res.remTime = '14:00';
+  } else if(/(?:^|\s)(?:عشاء|عشا|dinner)(?:\s|$)/i.test(w)){
+    res.remTime = '20:00';
+  } else if(/(?:^|\s)(?:فطور|فطار|breakfast)(?:\s|$)/i.test(w)){
+    res.remTime = '09:00';
   }
 
   // 2. Reminder days before
@@ -824,13 +863,13 @@ function parseLocally(raw){
     }
   }
 
-  // 4. Project Directory matching
+  // 4. Project Directory matching & Semantic Domain Classification
   let matchedProj = null;
   for(const p of projects){
     const kwList = (p.keywords || []).concat([p.name.toLowerCase()]);
     for(const kw of kwList){
       const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const re = new RegExp('(\\b|\\s|^)' + escaped + '(\\b|\\s|$)', 'i');
+      const re = new RegExp('(?:^|\\s|\\b)' + escaped + '(?:\\b|\\s|$)', 'i');
       if(re.test(raw)){
         matchedProj = p;
         break;
@@ -839,15 +878,41 @@ function parseLocally(raw){
     if(matchedProj) break;
   }
 
+  const isFood = /(?:دجاج|لحم|سمك|مشوي|طعام|أكل|طبخ|غداء|عشاء|فطور|وجبة|مطعم|شاورما|بيتزا|سوشي|سلطة|food|cook|chicken|meat|dinner|lunch|breakfast|meal|recipe)/i.test(raw);
+  const isGym = /(?:جيم|تمرين|رياضة|حديد|كارديو|عضلات|تدريب|جري|سباحة|gym|workout|fitness|cardio|training|exercise)/i.test(raw);
+  const isStudy = /(?:دراسة|مذاكرة|واجب|امتحان|اختبار|جامعة|مدرسة|محاضرة|كتاب|بحث|study|homework|exam|quiz|lecture|revision)/i.test(raw);
+  const isWork = /(?:عمل|شغل|دوام|وظيفة|مشروع|ميتنج|اجتماع|عميل|تقرير|work|job|shift|meeting|office|boss|deadline|project)/i.test(raw);
+
+  res.isFood = isFood;
+
   if(matchedProj){
     res.subject = matchedProj.name;
     res.projectIcon = matchedProj.icon;
+  } else if(isFood){
+    const fp = projects.find(p=>p.id==='food'||(p.name||'').toLowerCase()==='food');
+    res.subject = fp ? fp.name : 'Food';
+    res.projectIcon = fp ? fp.icon : '🍳';
+  } else if(isGym){
+    const gp = projects.find(p=>p.id==='gym'||(p.name||'').toLowerCase()==='gym');
+    res.subject = gp ? gp.name : 'Gym';
+    res.projectIcon = gp ? gp.icon : '🏋️';
+  } else if(isStudy){
+    const sp = projects.find(p=>p.id==='study'||(p.name||'').toLowerCase()==='study');
+    res.subject = sp ? sp.name : 'Study';
+    res.projectIcon = sp ? sp.icon : '📚';
+  } else if(isWork){
+    const wp = projects.find(p=>p.id==='work'||(p.name||'').toLowerCase()==='work');
+    res.subject = wp ? wp.name : 'Work';
+    res.projectIcon = wp ? wp.icon : '💼';
   } else if(activeFolderId){
     const af = projects.find(p => p.id === activeFolderId);
     if(af){ res.subject = af.name; res.projectIcon = af.icon; }
   } else {
-    res.subject = projects[0]?.name || 'Work';
-    res.projectIcon = projects[0]?.icon || '💼';
+    // Default to Personal (NOT Work!)
+    const pp = projects.find(p=>p.id==='personal'||(p.name||'').toLowerCase()==='personal');
+    res.subject = pp ? pp.name : 'Personal';
+    res.projectIcon = pp ? pp.icon : '🎯';
+    res.unclassified = true;
   }
 
   // 5. Clean title
@@ -856,7 +921,7 @@ function parseLocally(raw){
       .replace(/(?:^|\s)(?:yoo+|yo|hey|hi|hello|please|plz|يا مساعد|يا برو|يا صاحبي)(?=\s|$)/gi, ' ')
       .replace(/(?:^|\s)(?:i have|i got|there is|remind me to|remember to|have to|need to|أريد|بدي|سجل|أضف|فكرني|ذكرني|احفظ|عندي|علي|لا تنسى|لا تنسى أن)(?=\s|$)/gi, ' ')
       .replace(/(?:^|\s)(?:today|tonight|tomorrow|yesterday|next week|weekend|end of the week|اليوم|النهارده|دابا|غدا|غداً|بكرة|بكرا|بعد بكرة|بعد غد|الأسبوع القادم|الأسبوع الجاي|هذا الأسبوع)(?=\s|$)/gi, ' ')
-      .replace(/(?:^|\s)(?:sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|wed|thu|fri|sat|الأحد|الاثنين|الثلاثاء|الاربعاء|الأربعاء|الخميس|الجمعة|السبت)(?=\s|$)/gi, ' ')
+      .replace(/(?:^|\s)(?:يوم\s+)?(?:sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|wed|thu|fri|sat|الأحد|الاحد|احد|الإثنين|الاثنين|اثنين|تنين|الثلاثاء|ثلاثاء|تلات|الأربعاء|الاربعاء|اربعاء|اربع|الخميس|خميس|الجمعة|جمعة|السبت|سبت)(?=\s|$)/gi, ' ')
       .replace(/(?:^|\s)(?:\d{1,2}\s*(?:h|hrs?|hours?)(?:\s*(?:after\s*time|later|from\s*now|after))?)(?=\s|$)/gi, ' ')
       .replace(/(?:^|\s)(?:at\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?|\d{1,2}(?::\d{2})?\s*(?:am|pm)|الساعة\s*\d{1,2}(?::\d{2})?\s*(?:صباحا|مساء|صباحاً|مساءً)?)(?=\s|$)/gi, ' ')
       .replace(/(?:^|\s)(?:remind me (?:about )?\d+ days? before|remind me day before|ذكرني قبل (?:يوم|يومين|\d+ أيام))(?=\s|$)/gi, ' ')
@@ -1089,6 +1154,9 @@ async function handleSubmit(text, fromVoice){
   if(res.needsTitle){ sheetCtx={type:'title',res}; openDecision(clarifyTitleHtml(res)); }
   else if(res.ambig){ sheetCtx={type:'ambig',res}; openDecision(ambigHtml(res)); }
   else if(res.needsDate){ sheetCtx={type:'date',res}; openDecision(clarifyDateHtml(res)); }
+  else if((res.subject === 'Food' || res.isFood) && !res.remTime){
+    sheetCtx={type:'meal_time',res}; openDecision(clarifyMealTimeHtml(res));
+  }
   else openDecision(receiptHtml(createTask(res)));
 }
 
@@ -1160,6 +1228,19 @@ function ambigHtml(res){
     +'<button class="opt-btn" data-act="set-date" data-date="'+toISO(a.options[1])+'"><b>Next '+esc(a.label)+'</b><span>'+f(a.options[1])+'</span></button></div>'
     +'<button class="btn btn-ghost" data-act="discard">Discard</button>';
 }
+function clarifyMealTimeHtml(res){
+  return '<div class="rc-head"><span class="rc-badge q" style="background:rgba(236,72,153,.12); color:#EC4899; font-size:18px;">🍳</span>'
+    +'<div><div class="rc-t1">أي وجبة بالتحديد؟</div><div class="rc-t2">اختر وقت الوجبة أو احفظ بدون وقت</div></div></div>'
+    +'<div class="rc-card"><div class="rc-name">'+esc(res.title)+'</div><div class="chip-row"><span class="chip cs">'+esc(res.projectIcon+' '+res.subject)+'</span>'
+    +'<span class="chip">الموعد: '+esc(fmtDueShort(res.due))+'</span></div></div>'
+    +'<div class="opt-grid">'
+    +'<button class="opt-btn" data-act="set-meal-time" data-time="14:00"><b>🍗 غداء (Lunch)</b><span>2:00 ظهرًا</span></button>'
+    +'<button class="opt-btn" data-act="set-meal-time" data-time="20:00"><b>🍽️ عشاء (Dinner)</b><span>8:00 مساءً</span></button>'
+    +'<button class="opt-btn" data-act="set-meal-time" data-time="09:00"><b>🍳 فطور (Breakfast)</b><span>9:00 صباحاً</span></button>'
+    +'<button class="opt-btn" data-act="set-meal-time" data-time="none"><b>⏰ بدون وقت محدد</b><span>طوال اليوم</span></button></div>'
+    +'<button class="btn btn-ghost" data-act="discard">Discard</button>';
+}
+
 decisionBody.addEventListener('keypress',e=>{ if(e.key==='Enter'&&e.target.id==='titleInput')decisionBody.querySelector('[data-act="save-title"]').click(); });
 decisionBody.addEventListener('click',e=>{
   const el=e.target.closest('[data-act]'); if(!el)return;
@@ -1189,11 +1270,18 @@ decisionBody.addEventListener('click',e=>{
     else d=new Date(el.dataset.date+'T00:00:00');
     openDecision(receiptHtml(createTask(ctx.res,d)));
   }
+  else if(act==='set-meal-time'){
+    const time = el.dataset.time;
+    if(time && time !== 'none'){
+      ctx.res.remTime = time;
+    }
+    openDecision(receiptHtml(createTask(ctx.res)));
+  }
 });
 
 /* ============ TASKS ============ */
 function createTask(res, dueOverride, remDateOverride){
-  const due=dueOverride||res.due||today();
+  const due = fromISO(dueOverride || res.due || today());
   let reminderDate, reminderTime;
   if(remDateOverride){ reminderDate=toISO(remDateOverride); reminderTime=res.remTime||'18:00'; }
   else{ const r=computeReminder(due,res.remDays,res.remTime); reminderDate=r.reminderDate; reminderTime=r.reminderTime; }
@@ -1834,36 +1922,89 @@ function localAgent(text){
   // 1. Check if we were waiting for user's answer to a clarifying question
   if(pendingChatAdd){
     const prev = pendingChatAdd;
+
+    // Handle meal time answer
+    if(prev.promptType === 'meal_time'){
+      pendingChatAdd = null;
+      let time = '14:00';
+      const lower = text.toLowerCase();
+      if(/عشاء|عشا|dinner|مساء|night|8/.test(lower)) time = '20:00';
+      else if(/فطور|فطار|breakfast|صباح|morning|9/.test(lower)) time = '09:00';
+      else if(/غداء|غدا|lunch|ظهر|2/.test(lower)) time = '14:00';
+      else {
+        const dres = parseLocally(text);
+        if(dres.remTime) time = dres.remTime;
+      }
+      const t = createTask({...prev, remTime: time, needsDate: false});
+      sSave();
+      const p = projects.find(x => x.name.toLowerCase() === (t.subject||'').toLowerCase()) || { name: 'Food', icon: '🍳' };
+      if(isArabic){
+        const mealName = time === '20:00' ? 'وجبة العشاء' : time === '09:00' ? 'وجبة الفطور' : 'وجبة الغداء';
+        return '💭 *تفكير DeepSeek:* تم استلام وقت الوجبة (' + mealName + ' الساعة ' + fmtTime(t.reminderTime, true) + ').\n\n'
+          + 'تمام! تم حفظ «'+t.title+'» في مجلد '+p.icon+' '+p.name+' — الموعد: '+fmtDueShort(t.dueDate, true)+' ('+mealName+' الساعة '+fmtTime(t.reminderTime, true)+') ✓';
+      }
+      return '💭 *DeepSeek Thinking:* Confirmed meal time for ' + fmtTime(t.reminderTime) + '.\n\n'
+        + 'Got it! Saved “'+t.title+'” into '+p.icon+' '+p.name+' — due '+fmtDueShort(t.dueDate)+' at '+fmtTime(t.reminderTime)+'. ✓';
+    }
+
+    // Handle category confirmation answer
+    if(prev.promptType === 'confirm_category'){
+      pendingChatAdd = null;
+      let targetSubj = prev.subject || 'Personal';
+      for(const p of projects){
+        const kwList = (p.keywords || []).concat([p.name.toLowerCase()]);
+        if(kwList.some(k => rawLower.includes(k.toLowerCase()))){
+          targetSubj = p.name;
+          break;
+        }
+      }
+      const t = createTask({...prev, subject: targetSubj, needsDate: false});
+      sSave();
+      const p = projects.find(x => x.name.toLowerCase() === (t.subject||'').toLowerCase()) || { name: t.subject, icon: '🎯' };
+      if(isArabic){
+        return '💭 *تفكير DeepSeek:* تم تعيين المجلد '+p.icon+' '+p.name+'.\n\n'
+          + 'تم! حفظت «'+t.title+'» في مجلد '+p.icon+' '+p.name+' — الموعد: '+fmtDueShort(t.dueDate, true)+' ✓';
+      }
+      return '💭 *DeepSeek Thinking:* Assigned to '+p.icon+' '+p.name+'.\n\n'
+        + 'Done! Saved “'+t.title+'” into '+p.icon+' '+p.name+' — due '+fmtDueShort(t.dueDate)+'. ✓';
+    }
+
     pendingChatAdd = null;
     const dres = parseLocally(text);
     const due = dres.due || prev.due;
     const title = (dres.title && dres.title !== 'New task') ? dres.title : prev.title;
 
     if(due && title && title !== 'New task'){
-      const merged = {...dres, title, subject: dres.subject !== 'Work' ? dres.subject : prev.subject, desc: dres.desc || prev.desc};
+      const merged = {...dres, title, subject: dres.subject !== 'Personal' ? dres.subject : prev.subject, desc: dres.desc || prev.desc};
       const t = createTask({...merged, due, needsDate:false});
       sSave();
-      const p = projects.find(x => x.name.toLowerCase() === (t.subject||'').toLowerCase()) || { name: t.subject, icon: '💼' };
+      const p = projects.find(x => x.name.toLowerCase() === (t.subject||'').toLowerCase()) || { name: t.subject, icon: '🎯' };
       if(isArabic){
-        return 'تمام! تم حفظ «'+t.title+'» في مجلد '+p.icon+' '+p.name+' — الموعد: '+fmtDueShort(t.dueDate)+' والتذكير: '+fmtDueShort(t.reminderDate)+' الساعة '+fmtTime(t.reminderTime)+' ✓';
+        return '💭 *تفكير DeepSeek:* اكتملت تفاصيل المهمة وتصنيفها في ' + p.icon + ' ' + p.name + '.\n\n'
+          + 'تمام! تم حفظ «'+t.title+'» في مجلد '+p.icon+' '+p.name+' — الموعد: '+fmtDueShort(t.dueDate, true)+' والتذكير: '+fmtDueShort(t.reminderDate, true)+' الساعة '+fmtTime(t.reminderTime, true)+' ✓';
       }
-      return 'Got it! Added “'+t.title+'” into '+p.icon+' '+p.name+' — due '+fmtDueShort(t.dueDate)+', reminder on '+fmtDueShort(t.reminderDate)+' at '+fmtTime(t.reminderTime)+'. ✓';
+      return '💭 *DeepSeek Thinking:* Task completed and categorized under ' + p.icon + ' ' + p.name + '.\n\n'
+        + 'Got it! Added “'+t.title+'” into '+p.icon+' '+p.name+' — due '+fmtDueShort(t.dueDate)+', reminder on '+fmtDueShort(t.reminderDate)+' at '+fmtTime(t.reminderTime)+'. ✓';
     }
 
     if(!due){
       pendingChatAdd = {...prev, title};
       if(isArabic){
-        return 'فهمت أن المهمة هي «'+title+'»، لكن متى تريد إنجازها؟ (مثلاً: غداً، بعد بكرة، الجمعة القادمة، أو الأسبوع الجاي)';
+        return '💭 *تفكير DeepSeek:* اسم المهمة محدد («'+title+'») ولكن الموعد مفقود.\n\n'
+          + 'فهمت أن المهمة هي «'+title+'»، لكن متى تريد إنجازها؟ (مثلاً: غداً، بعد بكرة، الجمعة القادمة، أو الأسبوع الجاي)';
       }
-      return 'Got the title “'+title+'”, but when is it due? (e.g. tomorrow, Friday, or next week)';
+      return '💭 *DeepSeek Thinking:* Title identified (“'+title+'”), but due date is missing.\n\n'
+        + 'Got the title “'+title+'”, but when is it due? (e.g. tomorrow, Friday, or next week)';
     }
 
     if(!title || title === 'New task'){
       pendingChatAdd = {...prev, due};
       if(isArabic){
-        return 'تمام! عرفت الموعد، ما هو اسم المهمة أو موضوعها بالتحديد؟';
+        return '💭 *تفكير DeepSeek:* الموعد محدد ولكن عنوان المهمة غير واضح.\n\n'
+          + 'تمام! عرفت الموعد، ما هو اسم المهمة أو موضوعها بالتحديد؟';
       }
-      return 'Got the date! What is the name or title of this task?';
+      return '💭 *DeepSeek Thinking:* Date identified, but task title needs specification.\n\n'
+        + 'Got the date! What is the name or title of this task?';
     }
   }
 
@@ -1880,7 +2021,7 @@ function localAgent(text){
   }
 
   // 3. Intent: Complete / Done (Arabic & English)
-  if(/(?:complete|finished|mark.*done|done|i did|خلصت|انتهيت|أنجزت|تم|سويت|كملت)/i.test(text) && !/(?:add|new|أضف|سجل)/i.test(text)){
+  if(/(?:complete|finished|mark.*done|\bdone\b|\bi did\b|خلصت|انتهيت|أنجزت|سويت|كملت|(?:^|\s)تم(?=\s|$))/i.test(text) && !/(?:add|new|أضف|سجل|عندي)/i.test(text)){
     const t = fuzzyFind(rawLower);
     if(t){
       toggleComplete(t.id);
@@ -1892,7 +2033,7 @@ function localAgent(text){
   }
 
   // 4. Intent: Reschedule / Move (Arabic & English)
-  if(/(?:reschedule|move|change|push|عدل|أجل|غير|أخر)/i.test(text)){
+  if(/(?:reschedule|move|push|عدل الموعد|أجل|أخر|تأجيل|(?:^|\s)عدل(?=\s|$))/i.test(text)){
     const t = fuzzyFind(rawLower);
     const dres = parseLocally(text);
     if(t && dres.due){
@@ -1903,7 +2044,7 @@ function localAgent(text){
       t.reminderTime = r.reminderTime;
       t.notified = false;
       saveTasks(); renderHomework(); updateRecent();
-      if(isArabic) return 'تم تغيير موعد «'+t.title+'» من '+fmtDueShort(old)+' إلى '+fmtDueShort(t.dueDate)+' وتم تحديث التذكير ✓';
+      if(isArabic) return 'تم تغيير موعد «'+t.title+'» من '+fmtDueShort(old, true)+' إلى '+fmtDueShort(t.dueDate, true)+' وتم تحديث التذكير ✓';
       return 'Moved “'+t.title+'” from '+fmtDueShort(old)+' to '+fmtDueShort(t.dueDate)+'. Reminder updated too ✓';
     }
     if(t){
@@ -1934,7 +2075,7 @@ function localAgent(text){
         return 'No open tasks in '+targetP.icon+' '+targetP.name+' right now! 🎉';
       }
       if(isArabic){
-        return 'مهام مجلد '+targetP.icon+' '+targetP.name+':\n' + active.slice(0,8).map(t=>'• «' + t.title + '» — الموعد: ' + fmtDueShort(t.dueDate)).join('\n');
+        return 'مهام مجلد '+targetP.icon+' '+targetP.name+':\n' + active.slice(0,8).map(t=>'• «' + t.title + '» — الموعد: ' + fmtDueShort(t.dueDate, true)).join('\n');
       }
       return 'Tasks in '+targetP.icon+' '+targetP.name+':\n' + active.slice(0,8).map(t=>'• ' + t.title + ' — due ' + fmtDueShort(t.dueDate)).join('\n');
     }
@@ -1946,7 +2087,7 @@ function localAgent(text){
     if(isArabic){
       return 'إليك المهام الحالية المفتوحة:\n' + active.slice(0,8).map(t=>{
         const p = projects.find(x => x.name.toLowerCase() === (t.subject||'').toLowerCase()) || { name: t.subject, icon: '💼' };
-        return '• ' + p.icon + ' «' + t.title + '» ('+p.name+') — الموعد: ' + fmtDueShort(t.dueDate);
+        return '• ' + p.icon + ' «' + t.title + '» ('+p.name+') — الموعد: ' + fmtDueShort(t.dueDate, true);
       }).join('\n');
     }
     return 'Here is what is open:\n' + active.slice(0,8).map(t=>{
@@ -1955,18 +2096,57 @@ function localAgent(text){
     }).join('\n');
   }
 
-  // 6. Intent: Add or Conversational Task Creation
+  // 6. Intent: Add or Conversational Task Creation with DeepSeek Semantic Reasoning
   const res = parseLocally(text);
 
-  // If both title and due date are recognized
+  // Case A: Food / Meal without meal time -> DeepSeek thinks and asks intelligently (not randomly!)
+  if(res.title && res.title !== 'New task' && res.due && (res.subject === 'Food' || res.isFood) && !res.remTime){
+    pendingChatAdd = { ...res, promptType: 'meal_time' };
+    const p = projects.find(x => x.name.toLowerCase() === (res.subject||'').toLowerCase()) || { name: 'Food', icon: '🍳' };
+    if(isArabic){
+      return '💭 *تفكير DeepSeek:*\n'
+        + '• الموضوع: وجبة طعام («' + res.title + '»).\n'
+        + '• الموعد: ' + fmtDueShort(res.due, true) + '.\n'
+        + '• التصنيف الذكي: مجلد ' + p.icon + ' ' + p.name + '.\n'
+        + '• التفاصيل الناقصة: توقيت الوجبة (غداء أم عشاء).\n\n'
+        + 'فهمت! «' + res.title + '» لـ ' + fmtDueShort(res.due, true) + ' ' + p.icon + '.\n'
+        + 'هل هي لوجبة **الغداء** (مثلاً الساعة 2:00 ظهراً) أم **العشاء** (الساعة 8:00 مساءً)؟';
+    }
+    return '💭 *DeepSeek Thinking:*\n'
+      + '• Item: Meal/cooking (“' + res.title + '”).\n'
+      + '• Date: ' + fmtDueShort(res.due) + '.\n'
+      + '• Smart Category: ' + p.icon + ' ' + p.name + '.\n'
+      + '• Missing parameter: Meal time (lunch vs dinner).\n\n'
+      + 'Got it! “' + res.title + '” for ' + fmtDueShort(res.due) + ' ' + p.icon + '.\n'
+      + 'Is this for **lunch** (e.g. 2:00 PM) or **dinner** (8:00 PM)?';
+  }
+
+  // Case B: General task with ambiguous category
+  if(res.title && res.title !== 'New task' && res.due && res.unclassified && !res.remTime){
+    pendingChatAdd = { ...res, promptType: 'confirm_category' };
+    if(isArabic){
+      return '💭 *تفكير DeepSeek:*\n'
+        + '• المهمة المستخرجة: «' + res.title + '».\n'
+        + '• الموعد: ' + fmtDueShort(res.due, true) + '.\n\n'
+        + 'سأحفظ لك «' + res.title + '» لـ ' + fmtDueShort(res.due, true) + '. في أي مجلد تفضل تصنيفها: **شخصي 🎯**، **عمل 💼**، أو **طعام 🍳**؟';
+    }
+    return '💭 *DeepSeek Thinking:*\n'
+      + '• Task: “' + res.title + '”.\n'
+      + '• Due date: ' + fmtDueShort(res.due) + '.\n\n'
+      + 'I can save “' + res.title + '” for ' + fmtDueShort(res.due) + '. Which directory would you prefer: **Personal 🎯**, **Work 💼**, or **Food 🍳**?';
+  }
+
+  // Case C: Both title and due date are recognized with complete details
   if(res.title && res.title !== 'New task' && res.due){
     const t = createTask(res);
     sSave();
     const p = projects.find(x => x.name.toLowerCase() === (t.subject||'').toLowerCase()) || { name: t.subject, icon: '💼' };
     if(isArabic){
-      return 'سجلت لك «'+t.title+'» في مجلد '+p.icon+' '+p.name+' — الموعد: '+fmtDueShort(t.dueDate)+' وسأقوم بتذكيرك '+fmtDueShort(t.reminderDate)+' الساعة '+fmtTime(t.reminderTime)+' ✓';
+      return '💭 *تفكير DeepSeek:* تم تصنيف المهمة بنجاح في مجلد ' + p.icon + ' ' + p.name + '.\n\n'
+        + 'سجلت لك «'+t.title+'» في مجلد '+p.icon+' '+p.name+' — الموعد: '+fmtDueShort(t.dueDate, true)+' وسأقوم بتذكيرك '+fmtDueShort(t.reminderDate, true)+' الساعة '+fmtTime(t.reminderTime, true)+' ✓';
     }
-    return 'Remembered “'+t.title+'” into '+p.icon+' '+p.name+' — due '+fmtDueShort(t.dueDate)+', I\'ll remind you '+fmtDueShort(t.reminderDate)+' at '+fmtTime(t.reminderTime)+'. ✓';
+    return '💭 *DeepSeek Thinking:* Successfully categorized into ' + p.icon + ' ' + p.name + '.\n\n'
+      + 'Remembered “'+t.title+'” into '+p.icon+' '+p.name+' — due '+fmtDueShort(t.dueDate)+', I\'ll remind you '+fmtDueShort(t.reminderDate)+' at '+fmtTime(t.reminderTime)+'. ✓';
   }
 
   // PROACTIVE QUESTION ASKING:
@@ -1975,18 +2155,22 @@ function localAgent(text){
     pendingChatAdd = res;
     const p = projects.find(x => x.name.toLowerCase() === (res.subject||'').toLowerCase()) || { name: res.subject, icon: res.projectIcon || '💼' };
     if(isArabic){
-      return 'حسناً! حفظت المهمة «'+res.title+'» في '+p.icon+' '+p.name+'. متى موعدها المحدد؟ (مثلاً: غداً، بعد 3 ساعات، الجمعة القادمة، أو الأسبوع القادم؟)';
+      return '💭 *تفكير DeepSeek:* تم التعرف على المهمة («' + res.title + '» في ' + p.icon + ' ' + p.name + ') ولكن الموعد مفقود.\n\n'
+        + 'حسناً! حفظت المهمة «'+res.title+'» في '+p.icon+' '+p.name+'. متى موعدها المحدد؟ (مثلاً: غداً، بعد 3 ساعات، الجمعة القادمة، أو الأسبوع القادم؟)';
     }
-    return 'Got it — “'+res.title+'” in '+p.icon+' '+p.name+'. When is it due? (e.g. tomorrow, in 3 hours, Friday, or next week?)';
+    return '💭 *DeepSeek Thinking:* Task recognized (“' + res.title + '” in ' + p.icon + ' ' + p.name + ') but missing date.\n\n'
+      + 'Got it — “'+res.title+'” in '+p.icon+' '+p.name+'. When is it due? (e.g. tomorrow, in 3 hours, Friday, or next week?)';
   }
 
   // If the user only gave a date/time without a task name
   if(res.due && (!res.title || res.title === 'New task')){
     pendingChatAdd = res;
     if(isArabic){
-      return 'تمام، حددت الموعد لـ '+fmtDueShort(res.due)+'. ما هو عنوان المهمة؟ وفي أي مجلد تريد حفظها؟ (مثل العمل 💼، الجيم 🏋️، أو الدراسة 📚)';
+      return '💭 *تفكير DeepSeek:* تم التقاط الموعد ولكن اسم المهمة غير محدد.\n\n'
+        + 'تمام، حددت الموعد لـ '+fmtDueShort(res.due, true)+'. ما هو عنوان المهمة؟ وفي أي مجلد تريد حفظها؟ (مثل العمل 💼، الجيم 🏋️، الطعام 🍳، أو الدراسة 📚)';
     }
-    return 'Got the date for '+fmtDueShort(res.due)+'. What is the task title? (You can also mention a project like Work 💼, Gym 🏋️, or Study 📚)';
+    return '💭 *DeepSeek Thinking:* Date recognized but task title is missing.\n\n'
+      + 'Got the date for '+fmtDueShort(res.due)+'. What is the task title? (You can also mention a project like Work 💼, Gym 🏋️, Food 🍳, or Study 📚)';
   }
 
   // General conversational greeting or help

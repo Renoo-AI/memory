@@ -984,6 +984,22 @@ async function requestMicPermission(showToast = true) {
   }
 }
 
+function firefoxVoiceNoticeHtml(){
+  return '<div class="rc-head"><span class="rc-badge q" style="font-size:20px;">🦊</span>'
+    +'<div><div class="rc-t1">Voice in Firefox</div>'
+    +'<div class="rc-t2">Quick 1-click solution for Firefox users</div></div></div>'
+    +'<div style="font-size:13.5px; color:var(--ink-sub); line-height:1.6; margin-bottom:16px;">'
+    +'Firefox does not have a built-in speech recognition cloud engine like Chrome, Edge, or Safari.<br><br>'
+    +'<b>Choose one of these 2 easy options:</b><br>'
+    +'• <b>Recommended (Fastest)</b>: Open <b style="color:var(--ink);">smartodo-gray.vercel.app</b> in <b>Google Chrome</b>, <b>Edge</b>, or <b>Safari</b> — voice works instantly out of the box.<br>'
+    +'• <b>Stay on Firefox</b>: Install the free <a href="https://addons.mozilla.org/firefox/addon/speech-recognition-polyfill/" target="_blank" style="color:var(--orange); font-weight:800; text-decoration:underline;">Speech Recognition Polyfill Add-on</a> from Mozilla to enable voice input in Firefox!'
+    +'</div>'
+    +'<div style="display:grid; grid-template-columns:1fr 1.3fr; gap:10px;">'
+    +'<button class="btn btn-ghost" onclick="closeSheets()">Dismiss</button>'
+    +'<a class="btn btn-primary" href="https://addons.mozilla.org/firefox/addon/speech-recognition-polyfill/" target="_blank" style="text-decoration:none; display:flex; align-items:center; justify-content:center; text-align:center;">Get Firefox Add-on →</a>'
+    +'</div>';
+}
+
 async function startVoiceInput() {
   if (busy) return;
   fText = ''; iText = '';
@@ -995,7 +1011,7 @@ async function startVoiceInput() {
   }
 
   if (!SRC) {
-    toast('Speech recognition is not supported in this browser. Please use Google Chrome, Edge, or Safari.');
+    openDecision(firefoxVoiceNoticeHtml());
     return;
   }
 

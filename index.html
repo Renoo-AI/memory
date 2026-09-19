@@ -887,7 +887,7 @@ async function extract(text){
 const cloudArea=$('cloudArea'), statusLine=$('statusLine'), talkInput=$('talkInput');
 const chatStage=$('chatStage'), bubbleText=$('bubbleText');
 const DEFAULT_STATUS='Hold the cloud to speak, or type below';
-let holding=false, holdStart=0, voiceBroken=false, fText='', iText='';
+let holding=false, holdStart=0, voiceBroken=false, fText='', iText='', listeningToggle=false;
 
 function setStatus(t,hot){ statusLine.textContent=t; statusLine.classList.toggle('hot',!!hot); }
 function setCloud(s){ cloudArea.classList.remove('listening','thinking'); if(s!=='idle')cloudArea.classList.add(s); }
@@ -908,24 +908,58 @@ function getActiveVoiceLang() {
   return navigator.language || 'en-US';
 }
 
-if(SRC){
-  recog=new SRC();
-  recog.lang=getActiveVoiceLang();
-  recog.interimResults=true;
-  recog.continuous=true;
-  recog.onstart=()=>recogActive=true;
-  recog.onend=()=>recogActive=false;
-  recog.onresult=e=>{
-    fText=''; iText='';
-    for(let i=0;i<e.results.length;i++){
-      const r=e.results[i];
-      if(r.isFinal) fText+=r[0].transcript;
-      else iText+=r[0].transcript;
-    }
-    showBubble((fText+' '+iText).trim(),true);
-  };
-  recog.onerror=e=>{ if(e.error==='not-allowed'||e.error==='service-not-allowed')voiceBroken=true; recogActive=false; };
+function createRecogInstance() {
+  if (!SRC) return null;
+  try {
+    const r = new SRC();
+    r.lang = getActiveVoiceLang();
+    r.interimResults = true;
+    r.continuous = false;
+
+    r.onstart = () => {
+      recogActive = true;
+      voiceBroken = false;
+      setCloud('listening');
+      setStatus('Listening… Speak now', true);
+    };
+
+    r.onend = () => {
+      recogActive = false;
+      if (!holding) finishVoiceInput();
+    };
+
+    r.onresult = e => {
+      fText = ''; iText = '';
+      for (let i = 0; i < e.results.length; i++) {
+        const res = e.results[i];
+        if (res.isFinal) fText += res[0].transcript;
+        else iText += res[0].transcript;
+      }
+      const combined = (fText + ' ' + iText).trim();
+      if (combined) {
+        showBubble(combined, true);
+      }
+    };
+
+    r.onerror = e => {
+      recogActive = false;
+      console.warn('Speech error:', e.error);
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        if (location.protocol === 'file:') {
+          toast('Browsers restrict mic on file:// URLs — run via local server (http://localhost:8000)');
+        } else {
+          toast('Microphone access blocked. Click 🔒 icon in address bar to allow.');
+        }
+      } else if (e.error === 'network') {
+        toast('Speech recognition requires active internet connection.');
+      }
+    };
+    return r;
+  } catch (err) {
+    return null;
+  }
 }
+
 async function requestMicPermission(showToast = true) {
   if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
     try {
@@ -937,7 +971,7 @@ async function requestMicPermission(showToast = true) {
     } catch (err) {
       console.warn('Microphone permission error:', err);
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        toast('Microphone access blocked. Please allow mic in browser settings.');
+        toast('Microphone access blocked. Click 🔒 icon in address bar to allow mic.');
       } else {
         toast('Microphone not available on this device');
       }
@@ -945,46 +979,87 @@ async function requestMicPermission(showToast = true) {
       return false;
     }
   } else {
-    if (showToast) toast('Microphone API not supported in this browser');
+    if (showToast) toast('Speech API not supported in this browser. Try Chrome, Edge or Safari.');
     return false;
   }
 }
 
-async function startHold(e){
-  if(busy||holding)return; e.preventDefault();
-  holding=true; holdStart=Date.now(); fText=''; iText='';
-  setCloud('listening'); setStatus('Listening…',true); showBubble('',true);
+async function startVoiceInput() {
+  if (busy) return;
+  fText = ''; iText = '';
+  listeningToggle = true;
 
-  if(!window._micPermissionRequested && navigator.mediaDevices && navigator.mediaDevices.getUserMedia){
-    window._micPermissionRequested = true;
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia && !window._micPermissionGranted) {
     const ok = await requestMicPermission(false);
-    if(!holding) return;
+    if (ok) window._micPermissionGranted = true;
   }
 
-  if(recog&&!voiceBroken){
-    try{
-      recog.lang = getActiveVoiceLang();
+  if (!SRC) {
+    toast('Speech recognition is not supported in this browser. Please use Google Chrome, Edge, or Safari.');
+    return;
+  }
+
+  try {
+    if (recog && recogActive) {
+      try { recog.abort(); } catch (x) {}
+    }
+    recog = createRecogInstance();
+    if (recog) {
       recog.start();
-    }catch(x){}
+      setCloud('listening');
+      setStatus('Listening… Speak now', true);
+      showBubble('', true);
+    }
+  } catch (err) {
+    console.error('Failed to start recognition:', err);
   }
 }
+
+function stopVoiceInput() {
+  listeningToggle = false;
+  if (recog && recogActive) {
+    try { recog.stop(); } catch (x) {}
+  }
+  finishVoiceInput();
+}
+
+function finishVoiceInput() {
+  listeningToggle = false;
+  const text = (fText + ' ' + iText).trim();
+  if (text) {
+    setStatus('Understanding…', true);
+    handleSubmit(text, true);
+  } else {
+    setCloud('idle');
+    setStatus(DEFAULT_STATUS);
+    hideBubble();
+  }
+}
+
+function startHold(e){
+  if(busy||holding)return; e.preventDefault();
+  holding=true; holdStart=Date.now();
+  startVoiceInput();
+}
+
 function endHold(){
   if(!holding)return; holding=false;
-  if(recogActive){ try{recog.stop();}catch(x){} }
   const dur=Date.now()-holdStart;
-  setTimeout(()=>{
-    const text=(fText+' '+iText).trim();
-    if(!text){
-      setCloud('idle');
-      if(dur<400){ setStatus(DEFAULT_STATUS); hideBubble(); return; }
-      if(!SRC||voiceBroken){ toast('Voice isn’t available in this browser — type it below instead'); setStatus(DEFAULT_STATUS); hideBubble(); return; }
-      setStatus('Nothing heard — hold and speak',true); hideBubble(); return;
-    }
-    setStatus('Understanding…',true); handleSubmit(text,true);
-  },420);
+  if(dur < 350) {
+    // Treat short tap as toggle
+    return;
+  }
+  stopVoiceInput();
 }
+
 cloudArea.addEventListener('pointerdown',startHold);
-window.addEventListener('pointerup',()=>{ if(holding)endHold(); });
+cloudArea.addEventListener('click', (e) => {
+  e.preventDefault();
+  if (Date.now() - holdStart < 350) {
+    if (recogActive || listeningToggle) stopVoiceInput();
+  }
+});
+window.addEventListener('pointerup',endHold);
 cloudArea.addEventListener('contextmenu',e=>e.preventDefault());
 
 async function handleSubmit(text, fromVoice){
